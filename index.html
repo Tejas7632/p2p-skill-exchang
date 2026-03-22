@@ -1,0 +1,1359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PeerLynk | Skill Exchange</title>
+    <!-- Firebase Realtime Database Cloud Backend -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        :root {
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --glass-bg: rgba(15, 23, 42, 0.6);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden;
+            background-color: #020617;
+            color: #f8fafc;
+        }
+
+        .glass {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--glass-border);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.3);
+        }
+
+        .gradient-bg {
+            background: radial-gradient(circle at top right, #1e3a8a 0%, #0f172a 60%, #020617 100%);
+        }
+
+        /* Page and Tab Visibility */
+        .page {
+            display: none;
+            opacity: 0;
+            transition: opacity 0.4s ease-in-out;
+        }
+        
+        .page.active {
+            display: block;
+            opacity: 1;
+        }
+
+        /* SPA Animations */
+        @keyframes slideInFade {
+            0% { opacity: 0; transform: translateY(12px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        .tab-content {
+            display: none;
+        }
+        .tab-content.active {
+            display: block;
+            animation: slideInFade 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+        }
+
+        /* Authentication Shake Animation */
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-8px); border-color: rgba(239, 68, 68, 0.6); }
+            20%, 40%, 60%, 80% { transform: translateX(8px); border-color: rgba(239, 68, 68, 0.6); }
+        }
+        .shake {
+            animation: shake 0.5s;
+        }
+
+        /* Hover Lift Effect */
+        .card-hover {
+            transition: var(--transition);
+        }
+        
+        .card-hover:hover {
+            transform: scale(1.02) translateY(-6px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 8px 10px -6px rgba(0, 0, 0, 0.2);
+            border-color: rgba(99, 102, 241, 0.4);
+        }
+
+        /* Toast pos */
+        #toast {
+            transform: translateY(150%);
+            opacity: 0;
+            transition: var(--transition);
+        }
+        #toast.show {
+            transform: translateY(0);
+            opacity: 1;
+            z-index: 100;
+        }
+
+        /* Modal styling */
+        .modal-overlay {
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            background-color: rgba(2, 6, 23, 0.7);
+        }
+        
+        input:focus, textarea:focus {
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+            border-color: rgba(59, 130, 246, 0.8) !important;
+        }
+
+        input.error, textarea.error {
+            box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.5);
+            border-color: rgba(239, 68, 68, 0.8) !important;
+            background-color: rgba(239, 68, 68, 0.05);
+        }
+        
+        /* Custom Scrollbar for Chat */
+        .custom-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.3);
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: rgba(51, 65, 85, 0.5);
+            border-radius: 4px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb:hover {
+            background: rgba(71, 85, 105, 0.8);
+        }
+    </style>
+</head>
+<body class="text-slate-200">
+
+    <div id="app-root">
+        <!-- Auth Page -->
+        <section id="auth-page" class="page active min-h-screen flex items-center justify-center gradient-bg p-6">
+            <div id="auth-container" class="glass w-full max-w-5xl rounded-[2rem] overflow-hidden flex flex-col md:flex-row shadow-2xl border border-white/10 relative transition-transform">
+                
+                <div id="auth-overlay" class="absolute inset-0 z-50 bg-slate-950/90 backdrop-blur-xl hidden flex-col items-center justify-center rounded-[2rem]">
+                    <i data-lucide="loader-2" class="w-14 h-14 text-blue-500 animate-spin mb-6 drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]"></i>
+                    <h3 class="text-2xl font-black text-white tracking-tight animate-pulse">Authenticating</h3>
+                </div>
+
+                <div class="md:w-1/2 p-12 text-white flex flex-col justify-center relative overflow-hidden bg-slate-900/40 backdrop-blur-md border-r border-white/5">
+                    <h1 class="text-5xl font-extrabold tracking-tight mb-4 relative z-10 flex items-center gap-3">
+                        <i data-lucide="share-2" class="w-10 h-10 text-blue-400"></i>
+                        PeerLynk<span class="text-blue-400">.</span>
+                    </h1>
+                    <p class="text-blue-200 text-lg leading-relaxed relative z-10 font-medium">
+                        The next-gen peer-to-peer skill exchange platform for engineers and creators.
+                    </p>
+                    <div class="mt-10 space-y-5 relative z-10">
+                        <div class="flex items-center space-x-3">
+                            <i data-lucide="check-circle-2" class="w-6 h-6 text-blue-400"></i>
+                            <span class="font-medium text-lg text-slate-200">Verified Peers</span>
+                        </div>
+                    </div>
+                    <div class="absolute -bottom-24 -left-24 w-80 h-80 bg-blue-600 rounded-full mix-blend-screen opacity-20 blur-[80px]"></div>
+                    <div class="absolute -top-24 -right-24 w-80 h-80 bg-indigo-600 rounded-full mix-blend-screen opacity-20 blur-[80px]"></div>
+                </div>
+                
+                <div class="md:w-1/2 bg-slate-900/80 backdrop-blur-2xl p-12 flex flex-col justify-center relative z-10">
+                    <div id="login-form">
+                        <h2 class="text-4xl font-extrabold text-white mb-2">Welcome Back</h2>
+                        <div class="space-y-5 mt-6">
+                            <div class="relative">
+                                <i data-lucide="mail" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500"></i>
+                                <input id="login-email" type="email" placeholder="Email Address"
+                                    class="w-full p-4 pl-12 bg-slate-800/60 border border-slate-700 text-white rounded-xl outline-none font-medium">
+                            </div>
+                            <div class="relative">
+                                <i data-lucide="lock" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500"></i>
+                                <input id="login-password" type="password" placeholder="Password"
+                                    class="w-full p-4 pl-12 bg-slate-800/60 border border-slate-700 text-white rounded-xl outline-none font-medium">
+                            </div>
+                            <button onclick="handleAuth('login')"
+                                class="w-full mt-2 bg-blue-600 text-white font-bold py-4 rounded-xl hover:bg-blue-500 shadow-[0_0_20px_rgba(37,99,235,0.3)] flex items-center justify-center gap-2">
+                                Sign In <i data-lucide="arrow-right" class="w-5 h-5"></i>
+                            </button>
+                            <p class="text-center text-slate-400 font-medium mt-6">
+                                Don't have an account? <button onclick="toggleAuth(true)" class="text-blue-400 font-bold hover:underline">Register</button>
+                            </p>
+                        </div>
+                    </div>
+
+                    <div id="signup-form" class="hidden">
+                        <h2 class="text-4xl font-extrabold text-white mb-2">Join PeerLynk</h2>
+                        <div class="space-y-4 mt-6">
+                            <div class="relative">
+                                <i data-lucide="user" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500"></i>
+                                <input id="reg-name" type="text" placeholder="Full Name"
+                                    class="w-full p-4 pl-12 bg-slate-800/60 border border-slate-700 text-white rounded-xl outline-none font-medium">
+                            </div>
+                            <div class="relative">
+                                <i data-lucide="mail" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500"></i>
+                                <input id="reg-email" type="email" placeholder="Email Address"
+                                    class="w-full p-4 pl-12 bg-slate-800/60 border border-slate-700 text-white rounded-xl outline-none font-medium">
+                            </div>
+                            <div class="relative">
+                                <i data-lucide="lock" class="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500"></i>
+                                <input type="password" id="reg-password" onkeyup="checkPasswordRules(this.value)" placeholder="Secure Password"
+                                    class="w-full p-4 pl-12 bg-slate-800/60 border border-slate-700 text-white rounded-xl outline-none font-medium">
+                            </div>
+                            <div id="password-rules" class="text-xs space-y-1.5 mt-1 pb-2 hidden">
+                                <div id="rule-length" class="flex items-center gap-1.5 text-red-400 font-bold"><i data-lucide="x" class="w-3.5 h-3.5"></i> At least 8 characters</div>
+                                <div id="rule-number" class="flex items-center gap-1.5 text-red-400 font-bold"><i data-lucide="x" class="w-3.5 h-3.5"></i> Contains 1 number</div>
+                                <div id="rule-special" class="flex items-center gap-1.5 text-red-400 font-bold"><i data-lucide="x" class="w-3.5 h-3.5"></i> Contains 1 special character</div>
+                            </div>
+                            <button onclick="handleAuth('signup')"
+                                class="w-full mt-2 bg-indigo-600 text-white font-bold py-4 rounded-xl shadow-[0_0_20px_rgba(79,70,229,0.3)] flex items-center justify-center gap-2">
+                                Create Account <i data-lucide="user-plus" class="w-5 h-5"></i>
+                            </button>
+                            <p class="text-center text-slate-400 font-medium mt-4">
+                                Already a member? <button onclick="toggleAuth(false)" class="text-blue-400 font-bold hover:underline">Login</button>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Dashboard Page -->
+        <main id="dashboard-page" class="page min-h-screen relative pb-20">
+            <nav class="glass sticky top-0 z-40 px-6 py-4 flex justify-between items-center border-b border-slate-800/50">
+                <div class="flex items-center space-x-3">
+                    <div class="bg-gradient-to-br from-blue-600 to-indigo-600 text-white p-2.5 rounded-xl">
+                        <i data-lucide="share-2" class="w-6 h-6"></i>
+                    </div>
+                    <span class="text-2xl font-extrabold tracking-tight text-white hidden sm:block">PeerLynk<span class="text-blue-500">.</span></span>
+                </div>
+                
+                <div class="flex items-center space-x-6 md:space-x-8">
+                    <div class="flex space-x-4 md:space-x-8 text-sm font-bold">
+                        <button onclick="MapsTo('explore')" id="tab-explore" class="tab-link active text-blue-400 border-b-2 border-blue-500 pb-1 flex items-center gap-2">
+                            <i data-lucide="layout-grid" class="w-4 h-4"></i> <span class="hidden md:inline">Explore</span>
+                        </button>
+                        <button onclick="MapsTo('profile')" id="tab-profile" class="tab-link text-slate-400 border-b-2 border-transparent pb-1 flex items-center gap-2">
+                            <i data-lucide="user-circle" class="w-4 h-4"></i> <span class="hidden md:inline">Profile</span>
+                        </button>
+                        <button onclick="MapsTo('swaps')" id="tab-swaps" class="tab-link text-slate-400 border-b-2 border-transparent pb-1 flex items-center gap-2 relative">
+                            <i data-lucide="arrow-left-right" class="w-4 h-4"></i> <span class="hidden md:inline">My Swaps</span>
+                            <span id="requests-badge" class="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center hidden shadow-sm animate-pulse z-10">!</span>
+                        </button>
+                        <button onclick="MapsTo('messages')" id="tab-messages" class="tab-link text-slate-400 border-b-2 border-transparent pb-1 flex items-center gap-2 relative">
+                            <i data-lucide="message-square" class="w-4 h-4"></i> <span class="hidden md:inline">Messages</span>
+                            <span id="msg-badge" class="absolute -top-1 -right-2 bg-red-500 text-white text-[10px] w-4 h-4 rounded-full flex items-center justify-center hidden">!</span>
+                        </button>
+                    </div>
+                    
+                    <div class="flex items-center space-x-3 border-l border-slate-700 pl-4 md:pl-8">
+                        <div class="flex items-center gap-2 bg-slate-800/80 px-3 py-1.5 rounded-lg border border-slate-700 shadow-inner" title="Skill Credits Wallet">
+                            <i data-lucide="wallet" class="w-4 h-4 text-emerald-400"></i>
+                            <span id="nav-wallet-credits" class="text-white font-bold text-sm">--</span>
+                        </div>
+                        <div class="text-right hidden sm:block">
+                            <p id="user-display-name" class="text-sm font-bold text-white capitalize">User</p>
+                            <p class="text-[10px] font-semibold text-blue-400 uppercase tracking-wider flex justify-end mt-0.5">Member</p>
+                        </div>
+                        <div class="w-10 h-10 rounded-full border-2 border-slate-700 flex items-center justify-center bg-slate-800">
+                            <i data-lucide="user" class="w-5 h-5 text-slate-400"></i>
+                        </div>
+                        <button onclick="handleLogout()" class="p-2 bg-slate-800 hover:bg-red-500/20 text-slate-400 hover:text-red-400 rounded-xl transition-all" title="Sign Out">
+                            <i data-lucide="log-out" class="w-5 h-5"></i>
+                        </button>
+                    </div>
+                </div>
+            </nav>
+
+            <div class="max-w-7xl mx-auto px-6 py-8">
+                <!-- PROFILE TAB CONTENT -->
+                <div id="tab-profile-content" class="tab-content">
+                    <!-- Functional Profile Header & Stats -->
+                    <div class="glass bg-slate-800/40 rounded-[2rem] p-8 mb-8 border border-slate-700/50 flex flex-col md:flex-row items-center justify-between gap-8">
+                        <div class="flex items-center gap-6">
+                            <div class="w-20 h-20 md:w-24 md:h-24 rounded-full bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center text-4xl font-black text-white shadow-[0_0_30px_rgba(59,130,246,0.5)] border-4 border-slate-800" id="profile-avatar-letter">U</div>
+                            <div>
+                                <div class="flex items-center gap-3">
+                                    <h1 id="profile-name" class="text-2xl md:text-3xl font-extrabold text-white tracking-tight">User Name</h1>
+                                    <i data-lucide="badge-check" class="w-6 h-6 text-blue-400" title="Verified Member"></i>
+                                    <span class="bg-amber-500/20 text-amber-400 text-xs font-bold px-2 py-1 rounded-md flex items-center gap-1 border border-amber-500/30"><i data-lucide="star" class="w-3 h-3 fill-amber-400"></i> 5.0</span>
+                                </div>
+                                <p id="profile-email" class="text-slate-400 font-medium mt-1">user@example.com <span class="text-emerald-400 text-xs ml-2 font-bold px-2 py-0.5 bg-emerald-500/10 rounded-full border border-emerald-500/20">Active Profile</span></p>
+                            </div>
+                        </div>
+                        
+                        <!-- Live Stats Counters -->
+                        <div class="flex gap-3 md:gap-5 w-full md:w-auto overflow-x-auto pb-4 md:pb-0">
+                            <div class="bg-slate-900/60 border border-slate-700/50 rounded-2xl p-4 flex flex-col items-center justify-center min-w-[100px] shadow-inner">
+                                <span id="stat-skills" class="text-3xl font-black text-white">0</span>
+                                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-1 text-center leading-tight">Active<br>Postings</span>
+                            </div>
+                            <div class="bg-slate-900/60 border border-slate-700/50 rounded-2xl p-4 flex flex-col items-center justify-center min-w-[100px] shadow-inner">
+                                <span id="stat-swaps" class="text-3xl font-black text-white">0</span>
+                                <span class="text-[10px] font-bold text-slate-500 uppercase tracking-wider mt-1 text-center leading-tight">Connections<br>Made</span>
+                            </div>
+                            <div class="bg-slate-900/60 border border-slate-700/50 rounded-2xl p-4 flex flex-col items-center justify-center min-w-[100px] shadow-inner relative overflow-hidden group">
+                                <span id="stat-points" class="text-3xl font-black text-blue-400">100</span>
+                                <span class="text-[10px] font-bold text-blue-500 uppercase tracking-wider mt-1 text-center leading-tight">Skill<br>Points</span>
+                            </div>
+                            <div class="flex items-center pl-2 md:pl-5 border-l border-slate-700/50 ml-2">
+                                <button onclick="handleLogout()" class="bg-red-500/10 hover:bg-red-600 border border-red-500/50 hover:border-red-500 text-red-500 hover:text-white font-bold py-3.5 px-6 rounded-xl transition-all flex items-center gap-2 shadow-lg group">
+                                    <i data-lucide="log-out" class="w-5 h-5 group-hover:-translate-x-1 transition-transform"></i> Sign Out
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-12">
+                        <!-- Bio & Skills (Left) -->
+                        <div class="space-y-8">
+                            <div class="glass bg-slate-800/40 rounded-3xl p-6 border border-slate-700/50">
+                                <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2"><i data-lucide="user" class="w-5 h-5 text-blue-400"></i> About Me</h3>
+                                <textarea id="profile-bio-input" class="w-full bg-slate-900/80 border border-slate-700 text-white placeholder-slate-500 rounded-xl p-4 min-h-[120px] focus:border-blue-500 transition-colors" placeholder="Type your background..."></textarea>
+                                <button onclick="saveProfileBio()" class="mt-4 bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 px-6 rounded-xl flex items-center gap-2 transition-all w-full md:w-auto shadow-md active:scale-95">
+                                    <i data-lucide="save" class="w-4 h-4"></i> Save Bio
+                                </button>
+                            </div>
+
+                            <div class="glass bg-slate-800/40 rounded-3xl p-6 border border-slate-700/50">
+                                <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2"><i data-lucide="briefcase" class="w-5 h-5 text-indigo-400"></i> Skills I am Offering</h3>
+                                <div id="my-skills-list" class="space-y-3">
+                                    <!-- Embedded dynamically -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Recent Connections / Handshake History (Right) -->
+                        <div class="space-y-8">
+                            <div class="glass bg-slate-800/40 rounded-3xl p-6 border border-slate-700/50 h-full">
+                                <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2"><i data-lucide="users" class="w-5 h-5 text-emerald-400"></i> Active Swaps</h3>
+                                <div id="profile-connections-list" class="space-y-3">
+                                    <!-- Embedded dynamically -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- END OF PROFILE TAB CONTENT -->
+                
+                <header class="flex flex-col md:flex-row justify-between items-start md:items-end mb-12 gap-8" id="global-header">
+                    <div>
+                        <h2 id="page-hero-title" class="text-5xl font-extrabold text-white tracking-tight flex items-center gap-3">
+                            Marketplace
+                        </h2>
+                        <p id="page-hero-subtitle" class="text-slate-400 mt-3 text-xl font-medium">Discover and exchange skills with peers.</p>
+                    </div>
+                    
+                    <div class="flex flex-col sm:flex-row w-full md:w-auto gap-4">
+                        <div class="relative w-full sm:w-80 shadow-sm border border-slate-800 rounded-xl bg-slate-900/40 focus-within:ring-2 focus-within:ring-blue-500 flex items-center">
+                            <i data-lucide="search" class="absolute left-4 w-5 h-5 text-slate-500 pointer-events-none"></i>
+                            <input type="text" id="search-input" onkeyup="filterSkills()"
+                                placeholder="Search by skill or category..."
+                                class="w-full py-3.5 pl-12 pr-12 bg-transparent outline-none font-medium text-white">
+                            <button onclick="clearSearch()" id="clear-search-btn" class="absolute right-3 text-slate-500 hover:text-white hidden"><i data-lucide="x" class="w-5 h-5"></i></button>
+                        </div>
+                        <button id="post-skill-btn" onclick="openModal()" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-3.5 px-6 rounded-xl flex items-center justify-center gap-2 shadow-lg transition-all active:scale-95">
+                            <i data-lucide="plus" class="w-5 h-5"></i> Post Skill
+                        </button>
+                    </div>
+                </header>
+
+                <div id="tab-explore-content" class="tab-content active">
+                    <div id="marketplace-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 auto-rows-min">
+                        <!-- Cards injected via JS -->
+                    </div>
+                </div>
+
+                <div id="tab-swaps-content" class="tab-content relative z-10">
+                    <div class="max-w-4xl mx-auto space-y-10">
+                        <!-- Incoming Requests Module -->
+                        <div id="incoming-requests-container" class="hidden">
+                            <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2"><i data-lucide="bell-ring" class="w-5 h-5 text-red-500 animate-pulse"></i> Incoming Requests</h3>
+                            <div id="incoming-requests-list" class="space-y-4">
+                                <!-- Requests dynamically loaded via RTDB -->
+                            </div>
+                        </div>
+
+                        <!-- Active Outbound Market Swaps -->
+                        <div>
+                            <h3 class="text-xl font-bold text-white mb-4 flex items-center gap-2"><i data-lucide="arrow-left-right" class="w-5 h-5 text-blue-400"></i> My Connections</h3>
+                            <div id="swaps-list" class="space-y-4">
+                                <!-- Swaps injected via JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- MESSAGES TAB UI -->
+                <div id="tab-messages-content" class="tab-content">
+                    <div class="flex flex-col md:flex-row gap-6 h-[600px] max-w-6xl mx-auto">
+                        <!-- Left: Active Swaps -->
+                        <div id="sidebar-container" class="w-full md:w-1/3 glass bg-slate-800/40 rounded-3xl border border-slate-700/50 flex flex-col overflow-hidden">
+                            <div class="p-5 border-b border-slate-700/50 bg-slate-900/40 flex justify-between items-center">
+                                <h3 class="font-bold text-white text-lg flex items-center gap-2"><i data-lucide="users" class="w-5 h-5 text-blue-400"></i> Active Swaps</h3>
+                            </div>
+                            <div id="chat-sidebar" class="flex-1 overflow-y-auto custom-scroll p-3 space-y-2">
+                                <!-- Sidebar Items injected here -->
+                            </div>
+                        </div>
+
+                        <!-- Right: Chat Window -->
+                        <div id="chat-container" class="w-full md:w-2/3 glass bg-slate-800/40 rounded-3xl border border-slate-700/50 flex flex-col overflow-hidden relative hidden md:flex">
+                            <!-- Header -->
+                            <div id="chat-header" class="p-5 border-b border-slate-700/50 bg-slate-900/40 hidden items-center gap-4 relative">
+                                <button onclick="closeChatMobile()" class="md:hidden text-slate-400 hover:text-white p-2 -ml-2"><i data-lucide="arrow-left" class="w-5 h-5"></i></button>
+                                <div id="chat-header-avatar" class="w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-white shadow-lg text-lg"></div>
+                                <div>
+                                    <h4 id="chat-header-name" class="text-white font-bold text-lg leading-tight">Name</h4>
+                                    <p id="chat-header-skill" class="text-xs text-blue-400 font-bold uppercase tracking-wider">Skill</p>
+                                </div>
+                                <button id="handshake-btn-container" class="ml-auto hidden active:scale-95 transition-all">
+                                    <div class="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white font-bold py-2 px-3 md:px-4 rounded-xl text-xs transition-all flex items-center gap-2 shadow-lg border border-emerald-400/50">
+                                        <i data-lucide="handshake" class="w-4 h-4"></i> <span class="hidden md:inline">Complete Handshake</span>
+                                    </div>
+                                </button>
+                            </div>
+                            
+                            <!-- Empty State -->
+                            <div id="chat-empty" class="flex-1 flex flex-col items-center justify-center text-slate-500">
+                                <div class="bg-slate-800/50 p-6 rounded-full mb-4"><i data-lucide="message-square" class="w-12 h-12 text-slate-600"></i></div>
+                                <h3 class="font-bold text-white text-xl mb-1">Your Messages</h3>
+                                <p class="text-sm">Select an active swap to start chatting.</p>
+                            </div>
+                            
+                            <!-- Chat Area -->
+                            <div id="chat-messages" class="flex-1 overflow-y-auto custom-scroll p-6 space-y-6 hidden flex-col">
+                                <!-- Bubbles injected here -->
+                            </div>
+                            
+                            <!-- Input Area -->
+                            <div id="chat-input-container" class="p-4 bg-slate-900/60 border-t border-slate-700/50 hidden flex-col">
+                                <div class="flex items-center gap-3 mb-3">
+                                    <button onclick="sendQuickMessage('linkedin')" class="bg-blue-600/20 hover:bg-blue-500/30 text-blue-300 hover:text-white border border-blue-500/30 font-medium py-1.5 px-3 rounded-lg text-xs flex items-center gap-1.5 transition-all shadow-sm active:scale-95">
+                                        <i data-lucide="linkedin" class="w-3.5 h-3.5"></i> Share LinkedIn
+                                    </button>
+                                </div>
+                                <form id="chat-form" class="flex gap-3" onsubmit="handleSendMessage(event)">
+                                    <input type="text" id="chat-input" placeholder="Type your message..." required autocomplete="off"
+                                        class="flex-1 bg-slate-800 border border-slate-700 rounded-xl px-4 py-3 text-white outline-none focus:border-blue-500 transition-colors">
+                                    <button type="submit" class="bg-blue-600 hover:bg-blue-500 text-white p-3 rounded-xl transition-colors shadow-lg active:scale-95">
+                                        <i data-lucide="send" class="w-5 h-5"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+            
+            <div class="fixed top-20 right-20 w-[500px] h-[500px] bg-blue-700/10 rounded-full blur-[100px] pointer-events-none -z-10"></div>
+            <div class="fixed bottom-20 left-10 w-[600px] h-[600px] bg-indigo-800/10 rounded-full blur-[120px] pointer-events-none -z-10"></div>
+        </main>
+    </div>
+
+    <!-- Modals and Toasts removed for brevity but Toast exists in DOM -->
+    <div id="toast" class="fixed bottom-8 right-8 glass bg-slate-800/95 text-white px-6 py-4 rounded-xl shadow-2xl flex items-center space-x-4 border-slate-700 z-50">
+        <div id="toast-icon-bg" class="bg-emerald-500/20 p-2 rounded-full border border-emerald-500/30">
+            <span id="toast-icon"></span>
+        </div>
+        <div>
+            <h4 class="font-bold text-sm text-white" id="toast-title">Success</h4>
+            <span class="font-medium text-slate-400 text-xs" id="toast-msg">Action completed!</span>
+        </div>
+    </div>
+    
+    <div id="postSkillModal" class="fixed inset-0 z-50 hidden items-center justify-center modal-overlay opacity-0 p-4 transition-all duration-300">
+        <!-- Re-added to prevent JS errors -->
+        <div class="glass w-full max-w-lg bg-slate-900/90 p-8 rounded-[2rem] shadow-2xl transition-all border border-slate-700" id="modal-content">
+            <div class="flex justify-between mb-8 border-b border-slate-800 pb-4">
+                <h3 class="text-2xl font-bold text-white tracking-tight">Post a Skill</h3>
+                <button onclick="closeModal()" class="text-slate-500 hover:text-white"><i data-lucide="x" class="w-6 h-6"></i></button>
+            </div>
+            <form onsubmit="handlePostSkill(event)" class="space-y-4">
+                <input type="text" id="post-skill-name" class="w-full p-3 bg-slate-800 text-white rounded-xl outline-none" placeholder="Skill Name">
+                <input type="text" id="post-category" class="w-full p-3 bg-slate-800 text-white rounded-xl outline-none" placeholder="Category">
+                <input type="text" id="post-looking" class="w-full p-3 bg-slate-800 text-white rounded-xl outline-none" placeholder="Looking For">
+                <textarea id="post-bio" class="w-full p-3 bg-slate-800 text-white rounded-xl outline-none resize-none h-24" placeholder="Bio"></textarea>
+                <button type="submit" class="w-full mt-2 bg-indigo-600 text-white font-bold py-3 rounded-xl flex justify-center gap-2"><i data-lucide="send" class="w-5 h-5"></i> Publish</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let currentUser = null;
+        let currentTabId = 'explore';
+        let currentChatPeerId = null;
+        
+        const defaultSkills = [
+            { id: 'def_1', name: "Aman Gupta", skill: "Python/Flask", category: "Backend", looking: "Tailwind", bio: "Available for REST APIs.", color: "from-blue-500 to-cyan-500" },
+            { id: 'def_2', name: "Sania Mirza", skill: "UI/UX Design", category: "Design", looking: "Python", bio: "Figma wireframing.", color: "from-pink-500 to-rose-500" },
+            { id: 'def_3', name: "Vikram Seth", skill: "Linux Devops", category: "DevOps", looking: "React JS", bio: "Advanced Bash scripts.", color: "from-slate-400 to-slate-600" }
+        ];
+
+        // --- FIREBASE REALTIME DATABASE CLOUD SETUP ---
+        const firebaseConfig = {
+            apiKey: 'AIzaSyC7V6QbAx6wQpamanr8L5hLF6bp19DfqL8',
+            authDomain: 'peerlynk-ee5c4.firebaseapp.com',
+            databaseURL: 'https://peerlynk-ee5c4-default-rtdb.firebaseio.com',
+            projectId: 'peerlynk-ee5c4',
+            storageBucket: 'peerlynk-ee5c4.firebasestorage.app',
+            messagingSenderId: '1042593586302',
+            appId: '1:1042593586302:web:5077d647b6d686b45b0c2f'
+        };
+        
+        // Initialize Firebase Backend Bridge safely
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        
+        // Connect to Realtime Database Engine Reference
+        const db = firebase.database();
+        const skillsRef = db.ref('skills');
+
+        // --- GLOBAL CLOUD P2P DATA SYNC ENGINE ---
+        let userSkills = [];
+        let marketSkills = [...defaultSkills];
+        
+        // Listen to the /skills node in realtime. Automatically executes on any global update.
+        skillsRef.on('value', (snapshot) => {
+            let cloudSkills = [];
+            const data = snapshot.val();
+            
+            // Unpack dynamic object tree returned by Firebase RTDB
+            if (data) {
+                // We reverse the array to keep newest postings at the very top naturally
+                Object.keys(data).reverse().forEach(key => {
+                    const skillNode = data[key];
+                    cloudSkills.push({
+                        id: key, // Firebase unique push ID mapped directly to client UI memory
+                        name: skillNode.name || 'Anonymous',
+                        skill: skillNode.skill || 'Unknown Skill',
+                        category: skillNode.category || 'General',
+                        looking: skillNode.looking || 'Any',
+                        bio: skillNode.bio || '',
+                        color: skillNode.color || 'from-slate-600 to-slate-800',
+                        timestamp: skillNode.timestamp || Date.now()
+                    });
+                });
+            }
+            
+            // Hydrate the local client-side memory banks globally
+            userSkills = cloudSkills; 
+            
+            // Concat user generated matrix against default UI mock array securely
+            marketSkills = [...cloudSkills, ...defaultSkills];
+            
+            // Execute automated UI Real-Time Re-rendering pipeline gracefully
+            try {
+                if (currentTabId === 'explore') {
+                    const searchBox = document.getElementById('search-input');
+                    const query = searchBox ? searchBox.value.toLowerCase() : "";
+                    
+                    if (query.trim() !== "") {
+                        // Global Search Fix: Search applies specifically filtering against updated Cloud Pull
+                        filterSkills(); 
+                    } else {
+                        // Reset clean grid display using the newest network packet payload
+                        renderGrid(marketSkills); 
+                    }
+                }
+                if (currentTabId === 'profile') {
+                    // Update user's administrative dashboard concurrently
+                    renderProfileView(); 
+                }
+                // Refresh top gamification counters precisely
+                updateStats(); 
+                
+            } catch (syncError) {
+                console.warn("Soft UI render failure during Realtime Sync iteration:", syncError);
+            }
+        });
+        
+        // --- SKILL CREDIT ECONOMY ENGINE ---
+        let currentCredits = 2; // Default system state initializing wallet economy
+
+        function initUserWallet() {
+            if(!currentUser) return;
+            // Generate valid Firebase indexing key protecting against special characters safely
+            const safeUserId = currentUser.replace(/[.#$[\]]/g, '_');
+            const userRef = db.ref('users/' + safeUserId);
+            
+            // Persistent live connection mapping Wallet credits instantly universally
+            userRef.on('value', (snapshot) => {
+                const data = snapshot.val();
+                if (data === null) {
+                    // Create uninitialized user profile injecting the baseline 2 credit payload
+                    userRef.set({ credits: 2, name: currentUser });
+                    currentCredits = 2;
+                } else {
+                    currentCredits = data.credits;
+                }
+                
+                // Directly bind Realtime Cloud integers into the Top Nav Wallet UI immediately
+                const walletUI = document.getElementById('nav-wallet-credits');
+                if(walletUI) walletUI.innerText = currentCredits + (currentCredits === 1 ? " Credit" : " Credits");
+            });
+        }
+
+        async function completeHandshake(peerName) {
+            if(!currentUser) return;
+            if(currentCredits < 1) {
+                alert("Earn credits by teaching someone first!");
+                return;
+            }
+
+            const learnerId = currentUser.replace(/[.#$[\]]/g, '_');
+            const teacherId = peerName.replace(/[.#$[\]]/g, '_');
+            
+            const learnerRef = db.ref('users/' + learnerId + '/credits');
+            const teacherRef = db.ref('users/' + teacherId + '/credits');
+            
+            try {
+                // Execute destructive network transaction bridging value sequentially safely
+                await learnerRef.transaction((current_value) => {
+                    return (current_value || 0) - 1;
+                });
+                
+                await teacherRef.transaction((current_value) => {
+                    return (current_value === null ? 2 : current_value) + 1;
+                });
+                
+                showToast("Handshake complete! 1 Credit formally transferred.");
+            } catch (err) {
+                console.error("Handshake Transaction failed structurally: ", err);
+                showToast("P2P Transaction failed critically.");
+            }
+        }
+
+        // --- LOCAL PERSISTENCE INIT ---
+        let chatHistory = JSON.parse(localStorage.getItem('peerlynk_chats') || '{}');
+        let myConnections = JSON.parse(localStorage.getItem('myConnections') || '[]');
+
+        function getCategoryIcon(param) {
+            const cat = param.toLowerCase();
+            if(cat.includes('design') || cat.includes('ui')) return 'pen-tool';
+            if(cat.includes('code') || cat.includes('back')) return 'terminal';
+            return 'book-open';
+        }
+
+        // On Load Logic
+        window.onload = function() {
+            lucide.createIcons();
+            const sessionData = localStorage.getItem('peerlynk_session');
+            if (sessionData) {
+                currentUser = sessionData;
+                grantAccess();
+            }
+            
+            // Check if we were in the messages view prior to reload
+            const activeTab = localStorage.getItem('lastActiveTab') || 'explore';
+            if (sessionData && activeTab !== 'explore') {
+                MapsTo(activeTab);
+                
+                // If a chat was open
+                const lastChat = localStorage.getItem('lastActiveChatId');
+                if (activeTab === 'messages' && lastChat) {
+                    openChat(lastChat);
+                }
+            }
+        };
+
+        function checkPasswordRules(val) {
+            const r = { len: val.length >= 8, num: /\d/.test(val), spec: /[!@#$%^&*]/.test(val) };
+            if (val === "") document.getElementById('password-rules').classList.add('hidden');
+            else document.getElementById('password-rules').classList.remove('hidden');
+            
+            const up = (id, ok) => {
+                const el = document.getElementById(id);
+                el.className = `flex items-center gap-1.5 font-bold ${ok ? 'text-emerald-400' : 'text-red-400'}`;
+                el.innerHTML = `<i data-lucide="${ok?'check':'x'}" class="w-3.5 h-3.5"></i> ${el.innerText.trim()}`;
+            };
+            up('rule-length', r.len); up('rule-number', r.num); up('rule-special', r.spec);
+            lucide.createIcons();
+            return r.len && r.num && r.spec;
+        }
+
+        function handleAuth(type) {
+            if (type === 'login') {
+                const email = document.getElementById('login-email').value;
+                const pass = document.getElementById('login-password').value;
+                if(email === localStorage.getItem('userEmail') && pass === localStorage.getItem('userPass') && email !== "") {
+                    processLoginEvent(localStorage.getItem('userName') || email.split('@')[0]);
+                } else failLoginUI();
+            } else {
+                const name = document.getElementById('reg-name').value;
+                const email = document.getElementById('reg-email').value;
+                const pass = document.getElementById('reg-password').value;
+                if(!checkPasswordRules(pass) || !email || !name) { showToast("Invalid inputs", true); return; }
+                localStorage.setItem('userEmail', email); localStorage.setItem('userPass', pass); localStorage.setItem('userName', name);
+                showToast("Account Created!");
+                document.getElementById('login-email').value = email; document.getElementById('login-password').value = pass;
+                processLoginEvent(name);
+            }
+        }
+
+        function toggleAuth(isSignup) {
+            document.getElementById('login-form').classList.toggle('hidden', isSignup);
+            document.getElementById('signup-form').classList.toggle('hidden', !isSignup);
+        }
+
+        function failLoginUI() {
+            const el = document.getElementById('auth-container');
+            el.classList.remove('shake'); void el.offsetWidth; el.classList.add('shake');
+            showToast("Incorrect Credentials", true);
+        }
+
+        function processLoginEvent(name) {
+            currentUser = name;
+            localStorage.setItem('peerlynk_session', currentUser);
+            document.getElementById('auth-overlay').classList.remove('hidden');
+            document.getElementById('auth-overlay').classList.add('flex');
+            setTimeout(() => {
+                document.getElementById('auth-overlay').classList.add('hidden');
+                document.getElementById('auth-overlay').classList.remove('flex');
+                grantAccess();
+            }, 1000); 
+        }
+
+        function grantAccess() {
+            const email = localStorage.getItem('userEmail') || 'user@example.com';
+            document.getElementById('profile-name').innerText = currentUser;
+            document.getElementById('profile-email').innerHTML = email + ` <span class="text-emerald-400 text-xs ml-2 font-bold px-2 py-0.5 bg-emerald-500/10 rounded-full border border-emerald-500/20">Professional Member</span>`;
+            if(currentUser) document.getElementById('profile-avatar-letter').innerText = currentUser.charAt(0);
+            
+            // Connect User Identity fully against the live database triggering network wallet listeners iteratively
+            initUserWallet();
+            listenForRequests();
+            syncGlobalChats();
+            updateStats();
+
+            document.getElementById('user-display-name').innerText = currentUser;
+            document.getElementById('auth-page').classList.remove('active');
+            setTimeout(() => {
+                document.getElementById('auth-page').style.display = 'none';
+                document.getElementById('dashboard-page').classList.add('active');
+                if(!localStorage.getItem('lastActiveTab')) MapsTo('explore');
+            }, 300);
+        }
+
+        function updateStats() {
+            // Calculate active skills specific to user
+            const offeredCount = userSkills.filter(s => s.name === currentUser).length;
+            document.getElementById('stat-skills').innerText = offeredCount;
+            
+            const swapCount = myConnections.length;
+            document.getElementById('stat-swaps').innerText = swapCount;
+            
+            // Skill Points starts at 100 + extra based on engagement
+            const points = 100 + (swapCount * 10) + (offeredCount * 15);
+            document.getElementById('stat-points').innerText = points;
+        }
+        
+        function handleLogout() {
+            localStorage.removeItem('peerlynk_session');
+            localStorage.removeItem('lastActiveTab');
+            localStorage.removeItem('lastActiveChatId');
+            location.reload();
+        }
+
+        function MapsTo(pageId) {
+            currentTabId = pageId;
+            localStorage.setItem('lastActiveTab', pageId);
+            const searchInput = document.getElementById('search-input');
+            const postBtn = document.getElementById('post-skill-btn');
+            const header = document.getElementById('global-header');
+            
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.remove('active'));
+            document.querySelectorAll('.tab-link').forEach(el => {
+                el.classList.remove('text-blue-400', 'border-blue-500', 'active');
+                el.classList.add('text-slate-400', 'border-transparent');
+            });
+            
+            document.getElementById(`tab-${pageId}-content`).classList.add('active');
+            const activeLink = document.getElementById(`tab-${pageId}`);
+            if(activeLink) {
+                activeLink.classList.remove('text-slate-400', 'border-transparent');
+                activeLink.classList.add('text-blue-400', 'border-blue-500', 'active');
+            }
+            
+            searchInput.value = ""; 
+            header.style.display = (pageId === 'messages' || pageId === 'profile') ? 'none' : 'flex';
+            
+            if (pageId === 'explore') {
+                postBtn.style.display = 'flex';
+                renderGrid(marketSkills);
+            } 
+            else if (pageId === 'swaps') {
+                postBtn.style.display = 'none';
+                renderSwapsList(myConnections);
+            } 
+            else if (pageId === 'messages') {
+                renderChatSidebar(myConnections);
+            }
+            else if (pageId === 'profile') {
+                renderProfileView();
+            }
+            lucide.createIcons();
+        }
+
+        // --- PROFILE ENGINE (Skills, Bio, Connections) ---
+        function renderProfileView() {
+            // Bio rendering
+            const savedBio = localStorage.getItem('user_bio_' + currentUser) || "";
+            document.getElementById('profile-bio-input').value = savedBio;
+
+            // My Skills
+            const mySkillsContainer = document.getElementById('my-skills-list');
+            const mySkills = userSkills.filter(s => s.name === currentUser);
+            
+            if (mySkills.length === 0) {
+                mySkillsContainer.innerHTML = `<p class="text-slate-500 text-sm italic">You haven't posted any skills yet.</p>`;
+            } else {
+                mySkillsContainer.innerHTML = mySkills.map(skill => `
+                <div class="glass bg-slate-900/40 p-4 rounded-xl border border-slate-700/50 flex justify-between items-center group shadow-sm hover:border-slate-600 transition-colors">
+                    <div>
+                        <h4 class="text-white font-bold text-sm tracking-wide mb-0.5">${skill.skill}</h4>
+                        <p class="text-[10px] text-blue-400 font-bold uppercase tracking-wider">${skill.category}</p>
+                    </div>
+                    <button onclick="deleteSkill('${skill.id}')" class="text-red-400 hover:text-white bg-red-500/10 hover:bg-red-500 text-xs font-bold px-3 py-1.5 rounded-lg flex items-center gap-1.5 transition-colors shadow-sm whitespace-nowrap">
+                        <i data-lucide="trash-2" class="w-3.5 h-3.5"></i> Remove
+                    </button>
+                </div>`).join('');
+            }
+
+            // Handshake History
+            const connectionsContainer = document.getElementById('profile-connections-list');
+            if (myConnections.length === 0) {
+                connectionsContainer.innerHTML = `<p class="text-slate-500 text-sm italic">You haven't made any connections yet.</p>`;
+            } else {
+                connectionsContainer.innerHTML = myConnections.map(peer => `
+                <div class="flex items-center gap-3 bg-slate-900/30 p-3 rounded-xl border border-slate-800 hover:border-slate-700 transition-colors">
+                    <div class="w-10 h-10 rounded-full bg-gradient-to-br ${peer.color} flex items-center justify-center font-bold text-white shadow-md text-sm">${peer.name.charAt(0)}</div>
+                    <div>
+                        <h4 class="text-white font-bold text-sm">${peer.name}</h4>
+                        <p class="text-xs text-slate-400">Swapped for: <span class="text-emerald-400 font-medium">${peer.skill}</span></p>
+                    </div>
+                </div>`).join('');
+            }
+            lucide.createIcons();
+            updateStats();
+        }
+
+        function saveProfileBio() {
+            const text = document.getElementById('profile-bio-input').value;
+            localStorage.setItem('user_bio_' + currentUser, text);
+            showToast("Professional Bio saved to memory!");
+        }
+
+        async function deleteSkill(skillId) {
+            // Initiate destructive protocol across RTDB targeted pathway
+            try {
+                const specificSkillRef = firebase.database().ref('skills/' + skillId);
+                await specificSkillRef.remove();
+                
+                console.log(`[P2P Engine]: Skill ID ${skillId} destroyed globally.`);
+                showToast("Skill securely removed from the Realtime Cloud.");
+            } catch(err) {
+                console.error("[P2P Engine]: Cloud destruction failed:", err);
+                showToast("Failed to delete from Cloud Database");
+            }
+        }
+        
+        function filterSkills() {
+            const query = document.getElementById('search-input').value.toLowerCase();
+            const cleanBtn = document.getElementById('clear-search-btn');
+            
+            if (cleanBtn) {
+                if (query.length > 0) cleanBtn.classList.remove('hidden');
+                else cleanBtn.classList.add('hidden');
+            }
+
+            const arr = currentTabId === 'swaps' ? myConnections : marketSkills;
+            const filtered = arr.filter(s => 
+                s.skill.toLowerCase().includes(query) || 
+                s.category.toLowerCase().includes(query) || 
+                s.name.toLowerCase().includes(query) ||
+                (s.bio && s.bio.toLowerCase().includes(query)) ||
+                (s.looking && s.looking.toLowerCase().includes(query))
+            );
+            
+            currentTabId === 'swaps' ? renderSwapsList(filtered) : renderGrid(filtered);
+            lucide.createIcons();
+        }
+
+        function clearSearch() { document.getElementById('search-input').value = ""; filterSkills(); }
+
+        // --- HANDSHAKE LOGIC ---
+        function requestSwap(btn, skillId) {
+            // Apply Skill-Credit Base Economy Constraints Safely protecting Cloud Wallets 
+            if (currentCredits < 1) {
+                alert('Earn credits by teaching someone first!');
+                return;
+            }
+
+            const peer = marketSkills.find(s => s.id === skillId);
+            if (peer && !myConnections.some(s => s.id === skillId)) {
+                
+                // Network Call to Realtime Database pushing request strictly 
+                const safePeerId = peer.name.replace(/[.#$[\]]/g, '_');
+                const reqRef = db.ref('requests/' + safePeerId).push();
+                reqRef.set({
+                    requester: currentUser,
+                    skillId: peer.id,
+                    skill: peer.skill,
+                    timestamp: firebase.database.ServerValue.TIMESTAMP
+                });
+
+                myConnections.push(peer);
+                localStorage.setItem('myConnections', JSON.stringify(myConnections));
+                updateStats(); // Update live counter
+                syncGlobalChats(); // Sync globally to active socket infrastructure
+            }
+            // Update button layout instantly to link to messages
+            btn.innerHTML = `<i data-lucide="message-square" class="w-4 h-4"></i> Message`;
+            btn.classList.remove('bg-slate-700', 'hover:bg-blue-600', 'text-white'); // Removed original classes
+            btn.classList.add('bg-emerald-600', 'border', 'border-emerald-500', 'hover:bg-emerald-500', 'text-white', 'font-bold', 'px-5', 'py-2.5', ' rounded-xl', 'text-sm', 'shadow-md', 'transition-all', 'flex', 'items-center', 'gap-2', 'flex-shrink-0', 'animate-pulse'); // Added new classes
+            btn.onclick = function(e) { e.stopPropagation(); MapsTo('messages'); openChat(skillId); };
+            
+            lucide.createIcons();
+            showToast("Swap request securely dispatched directly to Peer!");
+        }
+        
+        // Listen exclusively for new Incoming Handshakes automatically rendering DOM constraints dynamically
+        function listenForRequests() {
+            if(!currentUser) return;
+            const safeCurrentUserId = currentUser.replace(/[.#$[\]]/g, '_');
+            const reqRef = db.ref('requests/' + safeCurrentUserId);
+            
+            reqRef.on('value', (snapshot) => {
+                const data = snapshot.val();
+                const container = document.getElementById('incoming-requests-container');
+                const list = document.getElementById('incoming-requests-list');
+                const badge = document.getElementById('requests-badge');
+                
+                if (data) {
+                    let reqs = [];
+                    Object.keys(data).forEach(key => reqs.push({id: key, ...data[key]}));
+                    
+                    container.classList.remove('hidden');
+                    badge?.classList.remove('hidden');
+                    
+                    list.innerHTML = reqs.map(req => `
+                    <div class="glass bg-slate-800/80 p-5 rounded-2xl border border-red-500/30 flex flex-col md:flex-row justify-between md:items-center gap-4 shadow-lg transform transition-all hover:scale-[1.01]">
+                        <div>
+                            <p class="text-sm text-slate-400 mb-1 flex items-center gap-1.5"><i data-lucide="zap" class="w-4 h-4 text-emerald-400"></i> New Match Opportunity</p>
+                            <h4 class="text-white font-bold text-lg leading-tight">${req.requester}</h4>
+                            <p class="text-xs text-blue-400 font-bold uppercase tracking-wider mt-1">${req.skill}</p>
+                        </div>
+                        <button onclick="approveHandshake('${req.requester}', '${req.id}')" class="bg-gradient-to-r from-emerald-500 to-emerald-600 hover:from-emerald-400 hover:to-emerald-500 text-white font-bold px-6 py-3 rounded-xl transition-all shadow-md flex items-center justify-center gap-2 active:scale-95 border border-emerald-400/50">
+                            <i data-lucide="check-circle" class="w-5 h-5"></i> Approve & Earn 1 Credit
+                        </button>
+                    </div>`).join('');
+                } else {
+                    container.classList.add('hidden');
+                    badge?.classList.add('hidden');
+                    list.innerHTML = "";
+                }
+                lucide.createIcons();
+            });
+        }
+
+        async function approveHandshake(requesterName, requestId) {
+            if(!currentUser) return;
+
+            const teacherId = currentUser.replace(/[.#$[\]]/g, '_');
+            const learnerId = requesterName.replace(/[.#$[\]]/g, '_');
+            
+            const teacherRef = db.ref('users/' + teacherId + '/credits');
+            const learnerRef = db.ref('users/' + learnerId + '/credits');
+            
+            try {
+                // Wipe request cleanly from persistent store avoiding duplication cycles
+                await db.ref('requests/' + teacherId + '/' + requestId).remove();
+
+                // Explicitly enforce dual-phase transaction resolving Cloud wallet changes inherently safely
+                await learnerRef.transaction(v => (v || 0) - 1);
+                await teacherRef.transaction(v => (v === null ? 2 : v) + 1);
+                
+                const mockSkillForRequester = marketSkills.find(s => s.name === requesterName) || { id: 'conn_'+Date.now(), name: requesterName, skill: 'General Explorer', looking: 'Anything', color: 'from-blue-600 to-indigo-600' };
+                if (!myConnections.some(s => s.name === requesterName)) {
+                    myConnections.push(mockSkillForRequester);
+                    localStorage.setItem('myConnections', JSON.stringify(myConnections));
+                    updateStats();
+                    syncGlobalChats();
+                }
+
+                // Realtime Auto-Welcome Trigger establishing network connection gracefully
+                const roomId = getChatRoomId(currentUser, requesterName);
+                const timeStr = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+                await db.ref('messages/' + roomId).push({
+                    senderName: currentUser,
+                    text: "Hi! I'm excited to swap skills with you. When are you free for a 30-minute session?",
+                    time: timeStr,
+                    timestamp: firebase.database.ServerValue.TIMESTAMP
+                });
+
+                if (currentTabId === 'swaps') renderSwapsList(myConnections);
+                showToast(`Approved! You earned 1 Credit resolving request from ${requesterName}.`);
+            } catch (err) {
+                console.error("Critical Approval Transaction Error:", err);
+                showToast("Failed to process approval transaction securely.");
+            }
+        }
+
+        function renderGrid(data) {
+            const grid = document.getElementById('marketplace-grid');
+            if (data.length === 0) {
+                grid.innerHTML = `<div class="col-span-full py-24 flex flex-col items-center justify-center text-slate-400 bg-slate-900/30 rounded-[2rem] border border-dashed border-slate-700 w-full animate-fade-in relative z-10 shadow-inner">
+                    <div class="bg-slate-800 p-5 rounded-full mb-5 shadow-lg border border-slate-700"><i data-lucide="search-x" class="w-12 h-12 text-slate-500"></i></div>
+                    <h3 class="text-2xl font-bold text-white mb-2 text-center">No peers found for this skill yet.</h3>
+                    <p class="font-medium text-slate-400 mb-8 max-w-sm text-center tracking-wide">Why not post it yourself?</p>
+                    <button onclick="clearSearch(); openModal()" class="bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold py-3 px-8 rounded-xl transition-all shadow-md flex items-center gap-2 border border-blue-500/50"><i data-lucide="plus" class="w-5 h-5"></i> Post Skill</button>
+                    </div>`;
+            }
+            else grid.innerHTML = data.map((item, i) => {
+                const bentoClass = (i % 5 === 0 || i % 5 === 3) ? "md:col-span-2" : "md:col-span-1";
+                const isOwner = item.name === currentUser;
+                const isSwapped = myConnections.some(s => s.id === item.id);
+                
+                let btnHTML = isOwner ? `<button disabled class="bg-slate-800 text-slate-500 font-bold px-5 py-2.5 rounded-xl text-sm border border-slate-700 cursor-not-allowed"><i data-lucide="lock" class="inline w-4 h-4"></i> Your Skill</button>` 
+                    : isSwapped ? `<button onclick="MapsTo('messages'); openChat('${item.id}')" class="bg-emerald-600 border border-emerald-500 hover:bg-emerald-500 text-white font-bold px-5 py-2.5 rounded-xl text-sm shadow-md transition-all flex items-center gap-2 flex-shrink-0"><i data-lucide="message-square" class="w-4 h-4"></i> Message</button>`
+                    : `<button onclick="requestSwap(this, '${item.id}')" class="bg-slate-700 hover:bg-blue-600 text-white font-bold px-5 py-2.5 rounded-xl text-sm transition-all flex items-center gap-2">Swap <i data-lucide="arrow-right" class="w-4 h-4"></i></button>`;
+
+                return `
+                <div class="glass ${bentoClass} bg-slate-800/40 p-7 rounded-[2rem] card-hover flex flex-col h-full border border-slate-700/50">
+                    <div class="flex items-center space-x-4 mb-6">
+                        <div class="w-14 h-14 bg-gradient-to-br ${item.color} rounded-2xl flex items-center justify-center font-bold text-white text-xl shadow-lg">${item.name.charAt(0)}</div>
+                        <div>
+                            <h4 class="font-bold ${isOwner ? 'text-blue-400' : 'text-white'} text-lg">${isOwner?'Posted by You':item.name}</h4>
+                            <span class="text-[10px] text-blue-300 bg-blue-900/40 px-2 py-1 rounded-md border border-blue-500/30 uppercase font-black"><i data-lucide="${getCategoryIcon(item.category)}" class="inline w-3 h-3"></i> ${item.category}</span>
+                        </div>
+                    </div>
+                    <div class="mb-6 flex-grow"><h3 class="text-2xl font-black text-white mb-2 leading-tight">${item.skill}</h3><p class="text-slate-400 text-sm">"${item.bio}"</p></div>
+                    <div class="bg-slate-900/60 p-5 rounded-2xl flex justify-between items-center border border-slate-800/80">
+                        <div class="max-w-[50%]"><p class="text-[10px] font-black text-slate-500 uppercase tracking-tight">Looking for</p><p class="font-bold text-slate-200 text-sm truncate">${item.looking}</p></div>
+                        ${btnHTML}
+                    </div>
+                </div>`
+            }).join('');
+            lucide.createIcons();
+        }
+
+        // --- PERSISTENT MESSAGING ENGINE ---
+        let activeRoomRefs = new Set();
+
+        function getChatRoomId(u1, u2) {
+            // Sort alphabetical creating unified predictable hashes ensuring shared database node indexing identically on both clients
+            const arr = [u1.replace(/[.#$[\]\s]/g, '_'), u2.replace(/[.#$[\]\s]/g, '_')];
+            arr.sort();
+            return arr.join('-room-');
+        }
+        
+        function syncGlobalChats() {
+            if (!currentUser) return;
+            
+            // Mount universal continuous sockets onto every registered Peer actively mapping chat packets
+            myConnections.forEach(peer => {
+                const roomId = getChatRoomId(currentUser, peer.name);
+                
+                // Securely halt execution binding duplicates natively
+                if (activeRoomRefs.has(roomId)) return;
+                activeRoomRefs.add(roomId);
+
+                const safeRef = db.ref('messages/' + roomId);
+                if(!chatHistory[peer.id]) chatHistory[peer.id] = [];
+                
+                safeRef.on('child_added', snap => {
+                    const msg = snap.val();
+                    chatHistory[peer.id].push(msg);
+                    
+                    // Conditional Active Rendering Logic seamlessly executing 'child_added' appends synchronously
+                    if (currentChatPeerId === peer.id) {
+                        try { appendMessageToDOM(msg); } catch(e) {}
+                    }
+                    if (currentTabId === 'messages') {
+                        try { renderChatSidebar(myConnections); } catch(e) {}
+                    }
+                });
+            });
+        }
+
+        function renderSwapsList(data) {
+            const swapsList = document.getElementById('swaps-list');
+            if (data.length === 0) {
+                swapsList.innerHTML = `<div class="py-24 flex flex-col items-center justify-center text-slate-400 bg-slate-900/30 rounded-[2rem] border border-dashed border-slate-700 w-full animate-fade-in relative z-10 shadow-inner">
+                    <div class="bg-slate-800 p-5 rounded-full mb-5 shadow-lg border border-slate-700"><i data-lucide="handshake" class="w-12 h-12 text-slate-500"></i></div>
+                    <h3 class="text-2xl font-bold text-white mb-2 text-center">No active swaps yet.</h3>
+                    <p class="font-medium text-slate-400 mb-8 max-w-sm text-center tracking-wide">Head to the marketplace to find peers and start swapping skills!</p>
+                    <button onclick="MapsTo('explore')" class="bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-bold py-3 px-8 rounded-xl transition-all shadow-md flex items-center gap-2 border border-blue-500/50"><i data-lucide="layout-grid" class="w-5 h-5"></i> Explore Marketplace</button>
+                    </div>`;
+                return;
+            }
+            swapsList.innerHTML = data.map(peer => `
+                <div class="glass bg-slate-800/40 p-6 rounded-3xl border border-slate-700/50 flex flex-col md:flex-row items-center justify-between gap-4 shadow-lg">
+                    <div class="flex items-center gap-4">
+                        <div class="w-14 h-14 bg-gradient-to-br ${peer.color} rounded-2xl flex items-center justify-center font-bold text-white text-xl shadow-md flex-shrink-0">${peer.name.charAt(0)}</div>
+                        <div>
+                            <h4 class="text-white font-bold text-lg">${peer.name}</h4>
+                            <p class="text-sm text-slate-400">Offering: <span class="text-blue-400 font-medium">${peer.skill}</span></p>
+                            <p class="text-xs text-slate-500">Looking for: <span class="text-emerald-400 font-medium">${peer.looking}</span></p>
+                        </div>
+                    </div>
+                    <button onclick="MapsTo('messages'); openChat('${peer.id}')" class="bg-blue-600 hover:bg-blue-500 text-white font-bold py-2.5 px-6 rounded-xl text-sm transition-all flex items-center gap-2 shadow-md active:scale-95">
+                        <i data-lucide="message-square" class="w-4 h-4"></i> Message
+                    </button>
+                </div>
+            `).join('');
+            lucide.createIcons();
+        }
+
+        function renderChatSidebar(data) {
+            const sidebar = document.getElementById('chat-sidebar');
+            if (data.length === 0) {
+                sidebar.innerHTML = `<div class="p-6 text-center text-slate-500 font-medium text-sm">No active swaps yet. Visit Explore to connect!</div>`;
+                return;
+            }
+            sidebar.innerHTML = data.map(peer => {
+                const history = chatHistory[peer.id] || [];
+                const lastMsg = history.length > 0 ? history[history.length-1].text : "Start a conversation";
+                const isSelected = currentChatPeerId === peer.id;
+                
+                return `
+                <div onclick="openChat('${peer.id}')" class="p-3 rounded-2xl cursor-pointer transition-all flex items-center gap-3 ${isSelected ? 'bg-blue-600/20 border border-blue-500/30' : 'hover:bg-slate-700/30 border border-transparent'}">
+                    <div class="relative w-10 h-10 bg-gradient-to-br ${peer.color} rounded-full flex items-center justify-center font-bold text-white shadow-md flex-shrink-0">
+                        ${peer.name.charAt(0)}
+                        <span class="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 border-2 border-slate-900 rounded-full"></span>
+                    </div>
+                    <div class="overflow-hidden">
+                        <h4 class="text-white font-bold text-sm truncate">${peer.name}</h4>
+                        <p class="text-xs text-slate-400 truncate ${isSelected ? 'text-blue-300' : ''}">${lastMsg}</p>
+                    </div>
+                </div>`
+            }).join('');
+        }
+
+        function closeChatMobile() {
+            document.getElementById('sidebar-container').classList.remove('hidden');
+            document.getElementById('chat-container').classList.add('hidden', 'md:flex');
+            document.getElementById('chat-container').classList.remove('flex');
+            currentChatPeerId = null;
+            renderChatSidebar(myConnections);
+        }
+
+        function openChat(peerId) {
+            const peer = myConnections.find(s => s.id === peerId);
+            if(!peer) return;
+
+            currentChatPeerId = peerId;
+            localStorage.setItem('lastActiveChatId', peerId);
+            
+            // UI dynamically handled universally by background global `syncGlobalChats` socket daemons reliably.
+            
+            // Re-render sidebar to highlight active
+            renderChatSidebar(myConnections);
+            
+            // Mobile responsive logic
+            document.getElementById('sidebar-container').classList.add('hidden', 'md:flex');
+            document.getElementById('chat-container').classList.remove('hidden', 'md:flex');
+            document.getElementById('chat-container').classList.add('flex');
+            
+            // Toggle UI States
+            document.getElementById('chat-empty').classList.add('hidden');
+            const hdr = document.getElementById('chat-header');
+            hdr.classList.remove('hidden'); hdr.classList.add('flex');
+            
+            const msgs = document.getElementById('chat-messages');
+            msgs.classList.remove('hidden'); msgs.classList.add('flex');
+            
+            const inp = document.getElementById('chat-input-container');
+            inp.classList.remove('hidden'); inp.classList.add('block');
+            
+            // Hydrate Header
+            document.getElementById('chat-header-name').innerText = "Chatting with " + peer.name;
+            document.getElementById('chat-header-skill').innerText = peer.skill;
+            const avatar = document.getElementById('chat-header-avatar');
+            avatar.className = `w-12 h-12 rounded-2xl flex items-center justify-center font-bold text-white shadow-lg text-lg bg-gradient-to-br ${peer.color}`;
+            avatar.innerText = peer.name.charAt(0);
+            
+            // Mount Handshake Transaction Node interactively capturing specific current Peer
+            const handshakeNode = document.getElementById('handshake-btn-container');
+            if(handshakeNode) {
+                handshakeNode.classList.remove('hidden');
+                handshakeNode.onclick = () => completeHandshake(peer.name);
+            }
+            
+            // Render History
+            renderChatMessages();
+            
+            // Focus input
+            document.getElementById('chat-input').focus();
+            lucide.createIcons();
+        }
+
+        function renderSingleMessageContent(msg) {
+            const isMe = msg.senderName === currentUser || msg.sender === 'me';
+            return `
+            <div class="flex flex-col max-w-[85%] ${isMe ? 'self-end items-end' : 'self-start items-start'} mb-2">
+                <div class="${isMe ? 'bg-blue-600 text-white rounded-l-2xl rounded-tr-2xl' : 'bg-slate-700 text-slate-200 rounded-r-2xl rounded-tl-2xl'} px-5 py-3 shadow-md text-sm leading-relaxed border border-white/5">
+                    ${msg.text}
+                </div>
+                <span class="text-[10px] text-slate-500 font-semibold mt-1 px-1">${msg.time || ''}</span>
+            </div>`;
+        }
+
+        function appendMessageToDOM(msg) {
+            const msgs = document.getElementById('chat-messages');
+            if (msgs) {
+                const ph = document.getElementById('chat-placeholder');
+                if (ph) ph.remove();
+                msgs.insertAdjacentHTML('beforeend', renderSingleMessageContent(msg));
+                msgs.scrollTop = msgs.scrollHeight;
+            }
+        }
+
+        function renderChatMessages() {
+            const msgs = document.getElementById('chat-messages');
+            const history = chatHistory[currentChatPeerId] || [];
+            
+            if(history.length === 0) {
+                msgs.innerHTML = `<div id="chat-placeholder" class="text-center my-auto text-slate-500 text-sm font-medium bg-slate-800/30 py-4 px-6 rounded-2xl self-center border border-slate-700/50">Connection established securely. Send a message to start swapping!</div>`;
+                return;
+            }
+            
+            msgs.innerHTML = history.map(msg => renderSingleMessageContent(msg)).join('');
+            
+            // Auto scroll down reliably tracking bounds explicitly
+            msgs.scrollTop = msgs.scrollHeight;
+        }
+
+        function sendQuickMessage(type) {
+            if(!currentChatPeerId) return;
+            const peerInfo = myConnections.find(s => s.id === currentChatPeerId);
+            if(!peerInfo) return;
+
+            let msgText = "";
+            if (type === 'linkedin') {
+                const safeUserId = currentUser.replace(/[.#$[\]\s]/g, '').toLowerCase();
+                msgText = `Hey! Let's connect on LinkedIn to keep our professional network growing. https://linkedin.com/in/${safeUserId}`;
+            }
+
+            const roomId = getChatRoomId(currentUser, peerInfo.name);
+            const timeStr = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            
+            db.ref('messages/' + roomId).push({
+                senderName: currentUser,
+                text: msgText,
+                time: timeStr,
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            });
+        }
+
+        function handleSendMessage(e) {
+            if(e) e.preventDefault();
+            const input = document.getElementById('chat-input');
+            const text = input.value.trim();
+            if(!text || !currentChatPeerId) return;
+            
+            const peerInfo = myConnections.find(s => s.id === currentChatPeerId);
+            if(!peerInfo) return;
+
+            // Transmit Data explicitly connecting network Firebase infrastructure identically across room index
+            const roomId = getChatRoomId(currentUser, peerInfo.name);
+            const timeStr = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            
+            db.ref('messages/' + roomId).push({
+                senderName: currentUser,
+                text: text,
+                time: timeStr,
+                timestamp: firebase.database.ServerValue.TIMESTAMP
+            });
+            
+            input.value = '';
+            // Live DOM update handled automatically by the asynchronous background .on socket connection
+        }
+
+        // Simulator loops detached successfully transferring execution onto cloud native infrastructure sync
+
+        // Modals and Toasts
+        function openModal() { 
+            const m = document.getElementById('postSkillModal');
+            m.classList.remove('hidden'); 
+            m.classList.add('flex'); 
+            setTimeout(() => { 
+                m.classList.add('opacity-100'); 
+                const focusTarget = document.getElementById('post-skill-name');
+                if (focusTarget) focusTarget.focus();
+            }, 10);
+        }
+        function closeModal() { 
+            const m = document.getElementById('postSkillModal');
+            m.classList.remove('opacity-100'); 
+            setTimeout(() => { 
+                m.classList.remove('flex');
+                m.classList.add('hidden');
+            }, 300);
+        }
+        
+        let tT;
+        function showToast(msg, isErr=false) {
+            const toast = document.getElementById('toast');
+            document.getElementById('toast-icon-bg').className = isErr ? "bg-red-500/20 p-2 rounded-full" : "bg-emerald-500/20 p-2 rounded-full";
+            document.getElementById('toast-icon').innerHTML = `<i data-lucide="${isErr?'alert-circle':'check-circle-2'}" class="w-6 h-6 ${isErr?'text-red-400':'text-emerald-400'}"></i>`;
+            document.getElementById('toast-title').innerText = isErr?"Error":"Success";
+            document.getElementById('toast-msg').innerText = msg;
+            lucide.createIcons();
+            toast.classList.remove('show'); clearTimeout(tT);
+            setTimeout(() => { toast.classList.add('show'); tT = setTimeout(()=>toast.classList.remove('show'), 3000); }, 50);
+        }
+        // --- FORM LOGIC ---
+
+        async function handlePostSkill(e) {
+            e.preventDefault();
+            
+            // Protect UI state during asynchronous network upload procedure gracefully
+            const btn = e.target.querySelector('button[type="submit"]');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = `<i data-lucide="loader" class="w-5 h-5 animate-spin"></i> Broadcasting...`;
+            btn.disabled = true;
+            
+            // Assemble highly structured P2P data payload matrix targeted for upload
+            const newSkillPayload = { 
+                name: currentUser, 
+                skill: document.getElementById('post-skill-name').value, 
+                category: document.getElementById('post-category').value, 
+                looking: document.getElementById('post-looking').value, 
+                bio: document.getElementById('post-bio').value, 
+                color: "from-blue-600 to-indigo-600", // Standard brand gradient for UX
+                timestamp: firebase.database.ServerValue.TIMESTAMP // RTDB specific reliable timestamp
+            };
+
+            try {
+                // Execute Realtime Database Push bridging client values strictly into master path
+                const newRef = firebase.database().ref('skills').push();
+                await newRef.set(newSkillPayload);
+                
+                console.log(`[P2P Engine]: Successfully pushed new node: ${newRef.key}`);
+                
+                // Cleanup UI upon confirmed network sync success state
+                closeModal(); 
+                e.target.reset(); 
+                showToast("Skill Broadcasted to the Global Realtime Cloud!");
+                
+            } catch(error) {
+                console.error("[P2P Engine]: Network broadcast failed critically.", error); 
+                showToast("Failed to connect to Realtime Cloud Database");
+            } finally {
+                // Revert UX elements avoiding lock states robustly
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                lucide.createIcons();
+            }
+        }
+    </script>
+</body>
+</html>
